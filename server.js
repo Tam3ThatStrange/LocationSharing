@@ -1,24 +1,32 @@
-const express = require('express');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
 const app = express();
-const PORT = 3000;
+const server = http.createServer(app);
+const io = new Server(server);
 
-app.use(express.json());
-app.use(express.static('.'));
+const PORT = process.env.PORT || 3000;
 
-let locations = [];
+app.use(express.static("public"));
 
-app.post('/update-location', (req, res) => {
-    const { latitude, longitude } = req.body;
+let users = {};
 
-    locations = [{ latitude, longitude }]; // overwrite for demo
+io.on("connection", (socket) => {
+    console.log("User connected:", socket.id);
 
-    res.sendStatus(200);
+    socket.on("send-location", (data) => {
+        users[socket.id] = data;
+        io.emit("update-locations", users);
+    });
+
+    socket.on("disconnect", () => {
+        delete users[socket.id];
+        io.emit("update-locations", users);
+    });
 });
 
-app.get('/locations', (req, res) => {
-    res.json(locations);
+server.listen(PORT, () => {
+    console.log("Server running on port", PORT);
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-});
