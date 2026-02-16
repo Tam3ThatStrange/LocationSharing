@@ -15,12 +15,45 @@ let users = {};
 io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
+    socket.on("join", (username) => {
+        users[socket.id] = {
+            username: username,
+            latitude: null,
+            longitude: null
+        };
+
+        io.emit("chat-message", {
+            username: "System",
+            message: `${username} joined the chat`
+        });
+    });
+
     socket.on("send-location", (data) => {
-        users[socket.id] = data;
+        if (users[socket.id]) {
+            users[socket.id].latitude = data.latitude;
+            users[socket.id].longitude = data.longitude;
+        }
         io.emit("update-locations", users);
     });
 
+    // 💬 CHAT MESSAGE
+    socket.on("chat-message", (message) => {
+        if (users[socket.id]) {
+            io.emit("chat-message", {
+                username: users[socket.id].username,
+                message: message
+            });
+        }
+    });
+
     socket.on("disconnect", () => {
+        if (users[socket.id]) {
+            io.emit("chat-message", {
+                username: "System",
+                message: `${users[socket.id].username} left`
+            });
+        }
+
         delete users[socket.id];
         io.emit("update-locations", users);
     });
@@ -29,4 +62,3 @@ io.on("connection", (socket) => {
 server.listen(PORT, () => {
     console.log("Server running on port", PORT);
 });
-
