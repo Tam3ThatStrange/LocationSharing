@@ -1,6 +1,9 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const server = http.createServer(app);
@@ -9,22 +12,42 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static("public"));
+app.use("/uploads", express.static("uploads"));
+
+if (!fs.existsSync("uploads")) {
+    fs.mkdirSync("uploads");
+}
+
+// Configure file storage
+const storage = multer.diskStorage({
+    destination: "uploads/",
+    filename: (req, file, cb) => {
+        const uniqueName = Date.now() + "-" + file.originalname;
+        cb(null, uniqueName);
+    }
+});
+
+const upload = multer({ storage });
+
+// File upload endpoint
+app.post("/upload", upload.single("file"), (req, res) => {
+    res.json({ fileUrl: `/uploads/${req.file.filename}` });
+});
 
 let users = {};
 
 io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
 
     socket.on("join", (username) => {
         users[socket.id] = {
-            username: username,
+            username,
             latitude: null,
             longitude: null
         };
 
         io.emit("chat-message", {
             username: "System",
-            message: `${username} joined the chat`
+            message: `${username} joined`
         });
     });
 
@@ -36,12 +59,11 @@ io.on("connection", (socket) => {
         io.emit("update-locations", users);
     });
 
-    // 💬 CHAT MESSAGE
     socket.on("chat-message", (message) => {
         if (users[socket.id]) {
             io.emit("chat-message", {
                 username: users[socket.id].username,
-                message: message
+                message
             });
         }
     });
