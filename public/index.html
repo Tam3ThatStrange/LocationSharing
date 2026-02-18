@@ -1,249 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Live Location + Chat</title>
-    <meta charset="utf-8" />
+    <title>Login - Location App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-
     <style>
         body {
             margin: 0;
-            font-family: 'Segoe UI', sans-serif;
+            font-family: sans-serif;
             background: #0f172a;
-            color: white;
-            overflow: hidden;
-        }
-
-        #map {
+            display: flex;
+            justify-content: center;
+            align-items: center;
             height: 100vh;
-            width: 100%;
-        }
-
-        /* Floating Chat Panel */
-        #chat {
-            position: absolute;
-            right: 20px;
-            bottom: 20px;
-            width: 320px;
-            height: 500px;
-            display: flex;
-            flex-direction: column;
-            backdrop-filter: blur(20px);
-            background: rgba(15, 23, 42, 0.85);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-            overflow: hidden;
-        }
-
-        #chat-header {
-            padding: 15px;
-            font-weight: bold;
-            text-align: center;
-            background: rgba(255,255,255,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-
-        #messages {
-            flex: 1;
-            padding: 15px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .message {
-            padding: 8px 12px;
-            border-radius: 12px;
-            font-size: 14px;
-            max-width: 80%;
-            word-wrap: break-word;
-        }
-
-        .system {
-            align-self: center;
-            background: rgba(255,255,255,0.1);
-            font-size: 12px;
-        }
-
-        .other {
-            background: #1e293b;
-            align-self: flex-start;
-        }
-
-        .me {
-            background: #2563eb;
-            align-self: flex-end;
-        }
-
-        .username {
-            font-size: 11px;
-            opacity: 0.7;
-            margin-bottom: 3px;
-        }
-
-        #input-area {
-            display: flex;
-            padding: 10px;
-            background: rgba(255,255,255,0.05);
-        }
-
-        #message-input {
-            flex: 1;
-            padding: 10px;
-            border-radius: 10px;
-            border: none;
-            outline: none;
-            background: #1e293b;
             color: white;
+        }
+
+        .box {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 15px;
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        input {
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
         }
 
         button {
-            margin-left: 8px;
-            padding: 10px 15px;
-            border-radius: 10px;
+            padding: 10px;
+            border-radius: 8px;
             border: none;
             background: #2563eb;
             color: white;
             cursor: pointer;
-            transition: 0.2s;
         }
 
         button:hover {
             background: #1d4ed8;
         }
-
-        /* Mobile */
-        @media (max-width: 768px) {
-            #chat {
-                width: 100%;
-                height: 40%;
-                right: 0;
-                bottom: 0;
-                border-radius: 20px 20px 0 0;
-            }
-        }
     </style>
 </head>
 <body>
 
-<div id="map"></div>
-
-<div id="chat">
-    <div id="chat-header">Live Chat</div>
-    <div id="messages"></div>
-    <div id="input-area">
-    <input id="file-input" type="file" hidden />
-    <button onclick="document.getElementById('file-input').click()">📎</button>
-    <input id="message-input" placeholder="Type message..." />
-    <button onclick="sendMessage()">Send</button>
+<div class="box">
+    <h2>Login</h2>
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <button onclick="register()">Register</button>
 </div>
 
-
 <script>
-    const socket = io();
-    const username = prompt("Enter your username:");
-    socket.emit("join", username || "Anonymous");
+async function register() {
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
 
-    const map = L.map('map').setView([0, 0], 2);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-    }).addTo(map);
-
-    let markers = {};
-
-    navigator.geolocation.watchPosition(position => {
-        const { latitude, longitude } = position.coords;
-        socket.emit("send-location", { latitude, longitude });
-        map.setView([latitude, longitude], 15);
-    }, 
-    error => alert("Location permission denied"),
-    { enableHighAccuracy: true });
-
-    socket.on("update-locations", (users) => {
-        for (let id in markers) {
-            if (!users[id]) {
-                map.removeLayer(markers[id]);
-                delete markers[id];
-            }
-        }
-
-        for (let id in users) {
-            const user = users[id];
-            if (user.latitude && user.longitude) {
-                if (!markers[id]) {
-                    markers[id] = L.marker([user.latitude, user.longitude])
-                        .addTo(map)
-                        .bindPopup(user.username);
-                } else {
-                    markers[id]
-                        .setLatLng([user.latitude, user.longitude])
-                        .setPopupContent(user.username);
-                }
-            }
-        }
-    });
-
-    function sendMessage() {
-        const input = document.getElementById("message-input");
-        const message = input.value;
-        if (message.trim() !== "") {
-            socket.emit("chat-message", message);
-            input.value = "";
-        }
-    }
-
-    socket.on("chat-message", (data) => {
-        const messages = document.getElementById("messages");
-        const div = document.createElement("div");
-
-        if (data.username === "System") {
-            div.className = "message system";
-            div.innerText = data.message;
-        } else {
-            div.className = "message " + 
-                (data.username === username ? "me" : "other");
-
-            div.innerHTML = `
-                <div class="username">${data.username}</div>
-                ${data.message}
-            `;
-        }
-
-        messages.appendChild(div);
-        messages.scrollTop = messages.scrollHeight;
-    });
-
-    document.getElementById("message-input")
-        .addEventListener("keypress", function(e) {
-            if (e.key === "Enter") sendMessage();
-        });
-
-        // FILE UPLOAD
-document.getElementById("file-input").addEventListener("change", async function() {
-    const file = this.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const response = await fetch("/upload", {
+    const res = await fetch("/register", {
         method: "POST",
-        body: formData
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
     });
 
-    const data = await response.json();
+    const data = await res.json();
+    alert(data.success ? "Registered!" : data.message);
+}
 
-    socket.emit("chat-message",
-        `<a href="${data.fileUrl}" target="_blank">📎 ${file.name}</a>`
-    );
-});
+async function login() {
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
 
+    const res = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+        location.reload();
+    } else {
+        alert("Invalid login");
+    }
+}
 </script>
 
 </body>
