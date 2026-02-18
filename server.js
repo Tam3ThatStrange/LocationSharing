@@ -2,8 +2,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const multer = require("multer");
-const session = require("express-session");
-const bcrypt = require("bcrypt");
+const path = require("path");
 const fs = require("fs");
 
 const app = express();
@@ -12,78 +11,28 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.use("/uploads", express.static("uploads"));
 
-app.use(session({
-    secret: "super-secret-key",
-    resave: false,
-    saveUninitialized: false
-}));
+if (!fs.existsSync("uploads")) {
+    fs.mkdirSync("uploads");
+}
 
-if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
-if (!fs.existsSync("users.json")) fs.writeFileSync("users.json", "[]");
-
+// Configure file storage
 const storage = multer.diskStorage({
     destination: "uploads/",
     filename: (req, file, cb) => {
-        cb(null, Date.now() + "-" + file.originalname);
+        const uniqueName = Date.now() + "-" + file.originalname;
+        cb(null, uniqueName);
     }
 });
+
 const upload = multer({ storage });
 
-/* ---------------- AUTH ---------------- */
-
-function getUsers() {
-    return JSON.parse(fs.readFileSync("users.json"));
-}
-
-function saveUsers(users) {
-    fs.writeFileSync("users.json", JSON.stringify(users));
-}
-
-app.post("/register", async (req, res) => {
-    const { username, password } = req.body;
-    const users = getUsers();
-
-    if (users.find(u => u.username === username)) {
-        return res.json({ success: false, message: "User exists" });
-    }
-
-    const hashed = await bcrypt.hash(password, 10);
-    users.push({ username, password: hashed });
-    saveUsers(users);
-
-    res.json({ success: true });
-});
-
-app.post("/login", async (req, res) => {
-    const { username, password } = req.body;
-    const users = getUsers();
-    const user = users.find(u => u.username === username);
-
-    if (!user) return res.json({ success: false });
-
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.json({ success: false });
-
-    req.session.username = username;
-    res.json({ success: true });
-});
-
-app.get("/session", (req, res) => {
-    res.json({ username: req.session.username || null });
-});
-
-/* ---------------- FILE UPLOAD ---------------- */
-
+// File upload endpoint
 app.post("/upload", upload.single("file"), (req, res) => {
     res.json({ fileUrl: `/uploads/${req.file.filename}` });
 });
-
-/* ---------------- SOCKET ---------------- */
 
 let users = {};
 
@@ -120,6 +69,13 @@ io.on("connection", (socket) => {
     });
 
     socket.on("disconnect", () => {
+        if (users[socket.id]) {
+            io.emit("chat-message", {
+                username: "System",
+                message: `${users[socket.id].username} left`
+            });
+        }
+
         delete users[socket.id];
         io.emit("update-locations", users);
     });
